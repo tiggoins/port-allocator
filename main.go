@@ -5,7 +5,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 
-	"github.com/tiggoins/port-allocator/leaderelection"
+	"github.com/tiggoins/port-allocator/election"
+	"github.com/tiggoins/port-allocator/k8s"
 )
 
 func main() {
@@ -13,7 +14,10 @@ func main() {
 	if err != nil {
 		klog.Fatalln("Error in rest config", err)
 	}
-	client := kubernetes.NewForConfigOrDie(restConf)
+	kubeClient := kubernetes.NewForConfigOrDie(restConf)
 	// leaderelection
-	leaderelection.Election(client)
+	election.Election(kubeClient)
+
+	namespacePorts := k8s.GetAllocatedNodePort(kubeClient)
+	
 }
