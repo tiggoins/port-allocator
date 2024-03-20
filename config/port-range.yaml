@@ -1,0 +1,10 @@
+yingxiaoyu:
+  - namespace: yingxiao20
+    nodePortRange: 30000-30100
+shengchanyu:
+  - namespace: pms30
+    nodePortRange: 30101-30200
+  - namespace: yongcai
+    nodePortRange: 30201-30300
+  - namespace: datalake
+    nodePortRange: 30301-30400
