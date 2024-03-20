@@ -5,6 +5,6 @@ shengchanyu:
   - namespace: pms30
     nodePortRange: 30101-30200
   - namespace: yongcai
-    nodePortRange: 30201-30300
+    nodePortRange: 30102-30300
   - namespace: datalake
     nodePortRange: 30301-30400
