@@ -11,16 +11,11 @@ import (
 )
 
 func main() {
-	restConf, err := clientcmd.BuildConfigFromFlags("", "")
-	if err != nil {
-		klog.Fatalln("Error in rest config", err)
-	}
-	kubeClient := kubernetes.NewForConfigOrDie(restConf)
-	// leaderelection
+	kubeClient := k8s.BuildKubernetesClient()
 	election.Election(kubeClient)
 
-	namespacePorts := k8s.GetAllocatedNodePort(kubeClient)
-	
+	allocatedPorts := k8s.GetAllocatedNodePort(kubeClient)
+
 	controller := controller.NewController(kubeClient)
-	
+
 }

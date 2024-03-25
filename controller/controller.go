@@ -13,6 +13,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+
+	"github.com/tiggoins/port-allocator/store"
 )
 
 // EventType type of event associated with an informer
@@ -21,8 +23,6 @@ type EventType string
 const (
 	// DeleteEvent event associated when an object is removed from an informer
 	DeleteEvent EventType = "DELETE"
-	MarkEvent   EventType = "MARK"
-	UnmarkEvent EventType = "UNMARK"
 )
 
 // Event holds the context of an event.
@@ -50,16 +50,17 @@ func NewController(kubeClient *kubernetes.Clientset) *Controller {
 	}
 }
 
-
-func (controller *Controller) Add(item interface{}) {
-	controller.queue.AddRateLimited(item)
+func (controller *Controller) Add(event Event) {
+	controller.queue.AddRateLimited(event)
 }
 
-func (controller *Controller) Watcher(stopCh chan struct{}) {
+func (controller *Controller) WatchDeleteEvent(stopCh chan struct{}) {
 	go controller.informer.Run(stopCh)
+
 	if !cache.WaitForCacheSync(stopCh, controller.informer.HasSynced) {
 		runtime.HandleError(fmt.Errorf("timed out waiting for caches to sync"))
 	}
+
 	controller.informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		DeleteFunc: func(obj interface{}) {
 			var event Event
@@ -72,7 +73,7 @@ func (controller *Controller) Watcher(stopCh chan struct{}) {
 				}
 			}
 			event.Type = DeleteEvent
-			controller.queue.Add(event)
+			controller.queue.AddRateLimited(event)
 		},
 	})
 
@@ -104,32 +105,13 @@ func (controller *Controller) worker() {
 
 		event, ok := key.(Event)
 		if !ok {
-			controller.queue.AddRateLimited(event)
+			klog.Warningln("get a key from workqueue but not Event type.ignore")
+			continue
 		}
 
-		switch event.Type {
-		case DeleteEvent:
-			controller.HandleDeleteEvent(event)
-		case MarkEvent:
-			controller.HandleMarkEvent(event)
-		case UnmarkEvent:
-			controller.HandleMarkEvent(event)
-		default:
-			klog.Warningf("Unknown event type,%s", event.Type)
-		}
+		
 
 		controller.queue.Done(key)
 	}
 }
 
-func (controller *Controller) HandleDeleteEvent(event Event) {
-
-}
-
-func (controller *Controller) HandleMarkEvent(event Event) {
-
-}
-
-func (controller *Controller) HandleUnMarkEvent(event Event) {
-
-}

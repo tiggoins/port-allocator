@@ -40,20 +40,21 @@ func LoadConfigFromFile() Results {
 	var results Results
 	for _, v := range items {
 		for _, vv := range v {
-			var result Result
-			result.Namespace = vv.Namespace
 			start, end, err := ParsePortRange(vv.NodePortRange)
 			if err != nil {
-				klog.Warningf("error parse nodeportrange of %s,got %s,skip this", vv.Namespace, vv.NodePortRange)
+				klog.Warningf("error parse nodeportrange of %s, got %s, skip this", vv.Namespace, vv.NodePortRange)
 				continue
 			}
-			result.portStart = start
-			result.portEnd = end
+			result := Result{
+				Namespace: vv.Namespace,
+				portStart: start,
+				portEnd:   end,
+			}
 			results = append(results, result)
 		}
 	}
 
-	// check if nodePort overlap,if so,exit
+	// check if nodePort overlap, if so, exit
 	results.checkOverlap()
 
 	return results
