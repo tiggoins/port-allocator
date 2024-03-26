@@ -1,6 +1,7 @@
 package store
 
 import (
+	"container/list"
 	"fmt"
 	"sync"
 )
@@ -13,6 +14,7 @@ type NamespaceNodePortConfig struct {
 type NamespaceConfig struct {
 	NodePortRange  PortRange
 	AllocatedPorts map[int]bool
+	OrderedKeys    *list.List // 使用链表来维护端口的顺序
 }
 
 type PortRange struct {
@@ -46,11 +48,9 @@ func (c *NamespaceNodePortConfig) addNamespace(namespace string, minPort, maxPor
 
 	// 添加命名空间配置
 	c.NamespaceConfigs[namespace] = &NamespaceConfig{
-		NodePortRange: PortRange{
-			Min: minPort,
-			Max: maxPort,
-		},
-		AllocatedPorts: make(map[int]bool), // 初始化为map[int]bool类型
+		NodePortRange:  PortRange{Min: minPort, Max: maxPort},
+		AllocatedPorts: make(map[int]bool),
+		OrderedKeys:    list.New(), // 初始化为链表类型
 	}
 	return nil
 }
@@ -77,8 +77,9 @@ func (c *NamespaceNodePortConfig) addPort(namespace string, ports []int) error {
 			return fmt.Errorf("port %d is already allocated in namespace %s", port, namespace)
 		}
 
-		// 添加到已分配列表
+		// 添加到已分配列表，并将端口添加到 OrderedKeys 中
 		nsConfig.AllocatedPorts[port] = true
+		nsConfig.OrderedKeys.PushBack(port)
 	}
 
 	return nil
@@ -97,6 +98,14 @@ func (c *NamespaceNodePortConfig) removePortFromAPI(namespace string, ports []in
 	// 遍历要移除的端口，如果已分配则从列表中移除
 	for _, port := range ports {
 		nsConfig.AllocatedPorts[port] = false
+
+		// 移除 OrderedKeys 中的端口
+		for e := nsConfig.OrderedKeys.Front(); e != nil; e = e.Next() {
+			if e.Value.(int) == port {
+				nsConfig.OrderedKeys.Remove(e)
+				break
+			}
+		}
 	}
 
 	return nil
@@ -112,9 +121,9 @@ func (c *NamespaceNodePortConfig) findAvailablePort(namespace string) (int, erro
 		return -1, fmt.Errorf("namespace %s does not exist", namespace)
 	}
 
-	// 遍历已分配的端口，找到第一个为false的端口并返回
-	for port, allocated := range nsConfig.AllocatedPorts {
-		if !allocated {
+	// 遍历 NodePort 范围内的端口，找到第一个未分配的端口并返回
+	for port := nsConfig.NodePortRange.Min; port <= nsConfig.NodePortRange.Max; port++ {
+		if !nsConfig.AllocatedPorts[port] {
 			return port, nil
 		}
 	}
@@ -122,6 +131,7 @@ func (c *NamespaceNodePortConfig) findAvailablePort(namespace string) (int, erro
 	// 如果未找到可用端口，则返回错误
 	return -1, fmt.Errorf("no available port in namespace %s", namespace)
 }
+
 
 // check if port is in the range of requirements
 func (c *NamespaceNodePortConfig) ifMeetRequirements(namespace string, port int) bool {
