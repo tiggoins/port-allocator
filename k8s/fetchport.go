@@ -11,7 +11,7 @@ import (
 
 type NamespacePort struct {
 	Namespace string
-	NodePorts []int
+	NodePorts []int32
 }
 
 func ListNamespaces(kubeClient *kubernetes.Clientset) []string {
@@ -44,9 +44,9 @@ func GetNamespacedAllocatedNodePort(kubeClient *kubernetes.Clientset, namespace 
 	// 遍历服务列表
 	for _, service := range services.Items {
 		// 获取命名空间对应的端口列表，并追加到 s 中
-		var ports []int
+		var ports []int32
 		for _, port := range service.Spec.Ports {
-			ports = append(ports, int(port.NodePort))
+			ports = append(ports, port.NodePort)
 		}
 		np = NamespacePort{Namespace: service.Namespace, NodePorts: ports}
 	}

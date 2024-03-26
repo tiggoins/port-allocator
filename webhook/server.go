@@ -7,13 +7,12 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/spf13/pflag"
 	v1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
-
-	"github.com/tiggoins/port-allocator/webhook"
 )
 
 // admitv1beta1Func handles a v1 admission
@@ -37,41 +36,55 @@ func NewServerFlagSet() *pflag.FlagSet {
 	return serverFlags
 }
 
-func NewServer(ctx context.Context, gHosts *sets.IngressHost) *Server {
+func NewServer(ctx context.Context) *Server {
+	var errorList []error
 	s := new(Server)
 	// pflag.CommandLine.StringVar(&s.certfile, "tls-cert-file", "", "Path to the certificate file (MUST specify)")
-	s.certfile, _ = pflag.CommandLine.GetString("tls-cert-file")
+	certfile, err := pflag.CommandLine.GetString("tls-cert-file")
+	if err != nil {
+		errorList = append(errorList, err)
+	}
 	// pflag.CommandLine.StringVar(&s.keyfile, "tls-key-file", "", "Path to the key file (MUST Specify)")
-	s.keyfile, _ = pflag.CommandLine.GetString("tls-key-file")
+	keyfile, err := pflag.CommandLine.GetString("tls-key-file")
+	if err != nil {
+		errorList = append(errorList, err)
+	}
 	// pflag.CommandLine.IntVarP(&s.port, "port", "p", 443, "Port to listen on (default to 443)")
-	s.port, _ = pflag.CommandLine.GetInt("port")
+	port, err := pflag.CommandLine.GetInt("port")
+	if err != nil {
+		errorList = append(errorList, err)
+	}
 
+	if len(errorList) != 0 {
+		klog.Fatalln(errorList)
+	}
+
+	s.certfile = certfile
+	s.keyfile = keyfile
+	s.port = port
 	s.ctx = ctx
-	s.admit = validator.NewValidator(gHosts).ValidateIngress
+	s.admit = NewMutator().mutateService
 
 	return s
 }
 
 func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	var body []byte
-	if r.Body != nil {
-		if data, err := io.ReadAll(r.Body); err == nil {
-			body = data
-		} else {
-			klog.V(2).ErrorS(err, "Error happened when reading request body")
-			return
-		}
+	if data, err := io.ReadAll(r.Body); err == nil {
+		body = data
+	} else {
+		klog.V(2).ErrorS(err, "Error happened when reading request body")
+		return
 	}
 
-	contentType := r.Header.Get("Content-Type")
-	if contentType != "application/json" {
+	if contentType := r.Header.Get("Content-Type"); contentType != "application/json" {
 		klog.Errorf("contentType=%s, expect application/json", contentType)
 		return
 	}
 
 	klog.V(5).Info(fmt.Sprintf("handling request: %s", body))
 
-	deserializer := scheme.Codecs.UniversalDeserializer()
+	deserializer := Codecs.UniversalDeserializer()
 	obj, gvk, err := deserializer.Decode(body, nil, nil)
 	if err != nil {
 		msg := fmt.Sprintf("Request decode error: %v", err)
@@ -114,7 +127,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) Start() {
-	http.HandleFunc("/ingress-validator", s.serve)
+	http.HandleFunc("/port-allocator", s.serve)
 	http.HandleFunc("/readyz", func(w http.ResponseWriter, req *http.Request) { w.Write([]byte("ok")) })
 
 	logger := log.New(new(httpLogger), "", 0)
@@ -125,7 +138,7 @@ func (s *Server) Start() {
 	}
 	s.server = server
 
-	klog.V(2).Infof("Staring Ingress-validator to validate empty host and conflict host，listening on port %d", s.port)
+	klog.V(2).Infof("Staring namespaced-based nodeport allocator，listening on port %d", s.port)
 	if err := server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
 		klog.Fatalln(err)
 	}
@@ -137,4 +150,15 @@ func (s *Server) Shutdown() error {
 		return err
 	}
 	return nil
+}
+
+type httpLogger struct{}
+
+func (*httpLogger) Write(b []byte) (n int, err error) {
+	m := string(b)
+	if strings.HasPrefix(m, "http: TLS handshake error") && strings.HasSuffix(m, ": EOF\n") {
+		// decrease the log level of TLS error
+		klog.V(10).Info(m)
+	}
+	return len(b), nil
 }

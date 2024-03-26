@@ -26,7 +26,7 @@ func NewNamespaceNodePortConfig() *NamespaceNodePortConfig {
 	}
 }
 
-func (c *NamespaceNodePortConfig) GetNamespace(namespace string) (*NamespaceConfig, bool) {
+func (c *NamespaceNodePortConfig) getNamespace(namespace string) (*NamespaceConfig, bool) {
 	nsConfig, ok := c.NamespaceConfigs[namespace]
 	if !ok {
 		return &NamespaceConfig{}, false
@@ -35,12 +35,12 @@ func (c *NamespaceNodePortConfig) GetNamespace(namespace string) (*NamespaceConf
 	return nsConfig, true
 }
 
-func (c *NamespaceNodePortConfig) AddNamespace(namespace string, minPort, maxPort int) error {
+func (c *NamespaceNodePortConfig) addNamespace(namespace string, minPort, maxPort int) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
 	// 检查命名空间是否已存在
-	if _, ok := c.GetNamespace(namespace); ok {
+	if _, ok := c.getNamespace(namespace); ok {
 		return fmt.Errorf("namespace %s already exists", namespace)
 	}
 
@@ -55,12 +55,12 @@ func (c *NamespaceNodePortConfig) AddNamespace(namespace string, minPort, maxPor
 	return nil
 }
 
-func (c *NamespaceNodePortConfig) AddPort(namespace string, ports []int) error {
+func (c *NamespaceNodePortConfig) addPort(namespace string, ports []int) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
 	// 检查命名空间是否存在
-	nsConfig, ok := c.GetNamespace(namespace)
+	nsConfig, ok := c.getNamespace(namespace)
 	if !ok {
 		return fmt.Errorf("namespace %s does not exist", namespace)
 	}
@@ -84,12 +84,12 @@ func (c *NamespaceNodePortConfig) AddPort(namespace string, ports []int) error {
 	return nil
 }
 
-func (c *NamespaceNodePortConfig) RemovePortFromAPI(namespace string, ports []int) error {
+func (c *NamespaceNodePortConfig) removePortFromAPI(namespace string, ports []int) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
 	// 检查命名空间是否存在
-	nsConfig, ok := c.GetNamespace(namespace)
+	nsConfig, ok := c.getNamespace(namespace)
 	if !ok {
 		return fmt.Errorf("namespace %s does not exist", namespace)
 	}
@@ -102,12 +102,12 @@ func (c *NamespaceNodePortConfig) RemovePortFromAPI(namespace string, ports []in
 	return nil
 }
 
-func (c *NamespaceNodePortConfig) FindAvailablePort(namespace string) (int, error) {
+func (c *NamespaceNodePortConfig) findAvailablePort(namespace string) (int, error) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
 	// 检查命名空间是否存在
-	nsConfig, ok := c.GetNamespace(namespace)
+	nsConfig, ok := c.getNamespace(namespace)
 	if !ok {
 		return -1, fmt.Errorf("namespace %s does not exist", namespace)
 	}
@@ -123,6 +123,20 @@ func (c *NamespaceNodePortConfig) FindAvailablePort(namespace string) (int, erro
 	return -1, fmt.Errorf("no available port in namespace %s", namespace)
 }
 
-func (c *NamespaceNodePortConfig) Len() int {
+// check if port is in the range of requirements
+func (c *NamespaceNodePortConfig) ifMeetRequirements(namespace string, port int) bool {
+	nsConfig, ok := c.getNamespace(namespace)
+	if !ok {
+		return false
+	}
+
+	if port <= nsConfig.NodePortRange.Max && port >= nsConfig.NodePortRange.Min {
+		return true
+	}
+
+	return false
+}
+
+func (c *NamespaceNodePortConfig) len() int {
 	return len(c.NamespaceConfigs)
 }

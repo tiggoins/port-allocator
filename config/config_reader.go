@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"fmt"
@@ -10,6 +10,11 @@ import (
 	"k8s.io/klog/v2"
 )
 
+const (
+	NodePortMinPort int64  = 30000
+	NodePortMaxPort int64  = 32767
+)
+
 type Items map[string][]Item
 
 type Item struct {
@@ -19,14 +24,14 @@ type Item struct {
 
 type Result struct {
 	Namespace string
-	portStart int
-	portEnd   int
+	portStart int32
+	portEnd   int32
 }
 
 type Results []Result
 
-func LoadConfigFromFile() Results {
-	y, err := os.ReadFile("port-range.yaml")
+func LoadConfigFromFile(configFile string) Results {
+	y, err := os.ReadFile(configFile)
 	if err != nil {
 		klog.Fatalln("error read file", err)
 	}
@@ -60,37 +65,37 @@ func LoadConfigFromFile() Results {
 	return results
 }
 
-func ParsePortRange(portRange string) (int, int, error) {
+func ParsePortRange(portRange string) (int32, int32, error) {
 	ports := strings.Split(portRange, "-")
-	min, err := strconv.Atoi(ports[0])
+	min, err := strconv.ParseInt(ports[0], 10, 32)
 	if err != nil {
 		klog.Warning(err)
 		return -1, -1, err
 	}
-	max, err := strconv.Atoi(ports[1])
+	max, err := strconv.ParseInt(ports[1], 10, 32)
 	if err != nil {
 		klog.Warning(err)
 		return -1, -1, err
 	}
 
-	if min > max {
-		msg := fmt.Errorf("nodeport range must from smaller to big")
+	if min > max || min >= NodePortMinPort || max <= NodePortMaxPort {
+		msg := fmt.Errorf("nodeport range MUST from small to big,and MUST between 30000 to 32767")
 		klog.Warning(msg)
 		return -1, -1, msg
 	}
 
-	return min, max, nil
+	return int32(min), int32(max), nil
 }
 
-func (results Results) checkOverlap() {
-	for i := 0; i < len(results); i++ {
-		for j := 0; j < len(results); j++ {
+func (r Results) checkOverlap() {
+	for i := 0; i < len(r); i++ {
+		for j := 0; j < len(r); j++ {
 			if i != j {
-				if (results[i].portStart >= results[j].portStart && results[i].portStart <= results[j].portEnd) ||
-					(results[i].portEnd >= results[j].portStart && results[i].portEnd <= results[j].portEnd) {
+				if (r[i].portStart >= r[j].portStart && r[i].portStart <= r[j].portEnd) ||
+					(r[i].portEnd >= r[j].portStart && r[i].portEnd <= r[j].portEnd) {
 					klog.Infof("nodeport range of namespace %s/(%d-%d) overlaps with port range of namespace %s/(%d-%d),exit the program.\n",
-						results[i].Namespace, results[i].portStart, results[i].portEnd,
-						results[j].Namespace, results[j].portStart, results[j].portEnd)
+						r[i].Namespace, r[i].portStart, r[i].portEnd,
+						r[j].Namespace, r[j].portStart, r[j].portEnd)
 					os.Exit(1)
 				}
 			}

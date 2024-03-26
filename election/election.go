@@ -35,7 +35,7 @@ func Election(client *kubernetes.Clientset) {
 	hostname, _ := os.Hostname()
 
 	recorder := broadcaster.NewRecorder(scheme.Scheme, apiv1.EventSource{
-		Component: "range-based-port-allocator",
+		Component: "nodeport-allocator",
 		Host:      hostname,
 	})
 
@@ -44,7 +44,7 @@ func Election(client *kubernetes.Clientset) {
 		Lock: &resourcelock.LeaseLock{
 			LeaseMeta: metav1.ObjectMeta{
 				Namespace: k8s.PodDetails.Namespace,
-				Name:      "range-based-port-allocator",
+				Name:      "nodeport-allocator",
 			},
 			Client: client.CoordinationV1(),
 			LockConfig: resourcelock.ResourceLockConfig{
@@ -69,7 +69,5 @@ func Election(client *kubernetes.Clientset) {
 	defer cancel()
 
 	// 开始 LeaderElection
-	go func() {
-		leaderElector.Run(ctx)
-	}()
+	leaderElector.Run(ctx)
 }
