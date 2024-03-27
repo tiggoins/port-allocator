@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/spf13/pflag"
+	"github.com/tiggoins/port-allocator/store"
 	v1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
@@ -25,32 +26,24 @@ type Server struct {
 	ctx      context.Context
 	admit    admitv1Func
 	server   *http.Server
+	s        *store.NamespaceNodePortConfig
 }
 
-func NewServerFlagSet() *pflag.FlagSet {
-	serverFlags := pflag.NewFlagSet("server", pflag.ExitOnError)
-	serverFlags.String("tls-cert-file", "", "Path to the certificate file (MUST specify)")
-	serverFlags.String("tls-key-file", "", "Path to the key file (MUST Specify)")
-	serverFlags.IntP("port", "p", 443, "Port to listen on (default to 443)")
-
-	return serverFlags
-}
-
-func NewServer(ctx context.Context) *Server {
+func NewServer(ctx context.Context, flag pflag.FlagSet, s *store.NamespaceNodePortConfig) *Server {
 	var errorList []error
-	s := new(Server)
+	server := new(Server)
 	// pflag.CommandLine.StringVar(&s.certfile, "tls-cert-file", "", "Path to the certificate file (MUST specify)")
-	certfile, err := pflag.CommandLine.GetString("tls-cert-file")
+	certfile, err := flag.GetString("tls-cert-file")
 	if err != nil {
 		errorList = append(errorList, err)
 	}
 	// pflag.CommandLine.StringVar(&s.keyfile, "tls-key-file", "", "Path to the key file (MUST Specify)")
-	keyfile, err := pflag.CommandLine.GetString("tls-key-file")
+	keyfile, err := flag.GetString("tls-key-file")
 	if err != nil {
 		errorList = append(errorList, err)
 	}
 	// pflag.CommandLine.IntVarP(&s.port, "port", "p", 443, "Port to listen on (default to 443)")
-	port, err := pflag.CommandLine.GetInt("port")
+	port, err := flag.GetInt("port")
 	if err != nil {
 		errorList = append(errorList, err)
 	}
@@ -59,13 +52,13 @@ func NewServer(ctx context.Context) *Server {
 		klog.Fatalln(errorList)
 	}
 
-	s.certfile = certfile
-	s.keyfile = keyfile
-	s.port = port
-	s.ctx = ctx
-	s.admit = NewMutator().mutateService
+	server.certfile = certfile
+	server.keyfile = keyfile
+	server.port = port
+	server.ctx = ctx
+	server.admit = NewMutator(server.s).mutateService
 
-	return s
+	return server
 }
 
 func (s *Server) serve(w http.ResponseWriter, r *http.Request) {

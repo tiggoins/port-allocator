@@ -1,16 +1,19 @@
 package webhook
 
 import (
+	"github.com/tiggoins/port-allocator/store"
 	v1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 )
 
-type Mutator struct{}
+type Mutator struct {
+	s *store.NamespaceNodePortConfig
+}
 
-func NewMutator() *Mutator {
-	return &Mutator{}
+func NewMutator(ss *store.NamespaceNodePortConfig) *Mutator {
+	return &Mutator{s: ss}
 }
 
 func (mu *Mutator) mutateService(ar *v1.AdmissionReview) *v1.AdmissionResponse {

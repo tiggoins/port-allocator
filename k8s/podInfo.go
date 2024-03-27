@@ -18,7 +18,8 @@ type PodInfo struct {
 	metav1.ObjectMeta
 }
 
-func GetIngressPod(kubeClient *kubernetes.Clientset) error {
+
+func GetPodInfo(kubeClient *kubernetes.Clientset) error {
 	podName := os.Getenv("POD_NAME")
 	podNs := os.Getenv("POD_NAMESPACE")
 

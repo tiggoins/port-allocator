@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	NodePortMinPort int64  = 30000
-	NodePortMaxPort int64  = 32767
+	NodePortMinPort int64 = 30000
+	NodePortMaxPort int64 = 32767
 )
 
 type Items map[string][]Item
@@ -24,8 +24,8 @@ type Item struct {
 
 type Result struct {
 	Namespace string
-	portStart int32
-	portEnd   int32
+	PortStart int32
+	PortEnd   int32
 }
 
 type Results []Result
@@ -52,8 +52,8 @@ func LoadConfigFromFile(configFile string) Results {
 			}
 			result := Result{
 				Namespace: vv.Namespace,
-				portStart: start,
-				portEnd:   end,
+				PortStart: start,
+				PortEnd:   end,
 			}
 			results = append(results, result)
 		}
@@ -91,11 +91,11 @@ func (r Results) checkOverlap() {
 	for i := 0; i < len(r); i++ {
 		for j := 0; j < len(r); j++ {
 			if i != j {
-				if (r[i].portStart >= r[j].portStart && r[i].portStart <= r[j].portEnd) ||
-					(r[i].portEnd >= r[j].portStart && r[i].portEnd <= r[j].portEnd) {
+				if (r[i].PortStart >= r[j].PortStart && r[i].PortStart <= r[j].PortEnd) ||
+					(r[i].PortEnd >= r[j].PortStart && r[i].PortStart <= r[j].PortEnd) {
 					klog.Infof("nodeport range of namespace %s/(%d-%d) overlaps with port range of namespace %s/(%d-%d),exit the program.\n",
-						r[i].Namespace, r[i].portStart, r[i].portEnd,
-						r[j].Namespace, r[j].portStart, r[j].portEnd)
+						r[i].Namespace, r[i].PortStart, r[i].PortEnd,
+						r[j].Namespace, r[j].PortStart, r[j].PortEnd)
 					os.Exit(1)
 				}
 			}

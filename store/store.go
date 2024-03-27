@@ -1,8 +1,8 @@
 package store
 
 import (
-	"container/list"
 	"fmt"
+	"sort"
 	"sync"
 )
 
@@ -13,13 +13,12 @@ type NamespaceNodePortConfig struct {
 
 type NamespaceConfig struct {
 	NodePortRange  PortRange
-	AllocatedPorts map[int]bool
-	OrderedKeys    *list.List // 使用链表来维护端口的顺序
+	AllocatedPorts map[int32]bool
 }
 
 type PortRange struct {
-	Min int
-	Max int
+	Min int32
+	Max int32
 }
 
 func NewNamespaceNodePortConfig() *NamespaceNodePortConfig {
@@ -37,7 +36,7 @@ func (c *NamespaceNodePortConfig) getNamespace(namespace string) (*NamespaceConf
 	return nsConfig, true
 }
 
-func (c *NamespaceNodePortConfig) addNamespace(namespace string, minPort, maxPort int) error {
+func (c *NamespaceNodePortConfig) AddNamespace(namespace string, minPort, maxPort int32) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -49,13 +48,12 @@ func (c *NamespaceNodePortConfig) addNamespace(namespace string, minPort, maxPor
 	// 添加命名空间配置
 	c.NamespaceConfigs[namespace] = &NamespaceConfig{
 		NodePortRange:  PortRange{Min: minPort, Max: maxPort},
-		AllocatedPorts: make(map[int]bool),
-		OrderedKeys:    list.New(), // 初始化为链表类型
+		AllocatedPorts: make(map[int32]bool),
 	}
 	return nil
 }
 
-func (c *NamespaceNodePortConfig) addPort(namespace string, ports []int) error {
+func (c *NamespaceNodePortConfig) AddPortToNamespace(namespace string, ports []int32) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -64,6 +62,11 @@ func (c *NamespaceNodePortConfig) addPort(namespace string, ports []int) error {
 	if !ok {
 		return fmt.Errorf("namespace %s does not exist", namespace)
 	}
+
+	// 对切片进行排序
+	sort.Slice(ports, func(i, j int) bool {
+		return ports[i] < ports[j]
+	})
 
 	// 遍历要添加的端口，如果未分配则添加到列表中
 	for _, port := range ports {
@@ -79,13 +82,12 @@ func (c *NamespaceNodePortConfig) addPort(namespace string, ports []int) error {
 
 		// 添加到已分配列表，并将端口添加到 OrderedKeys 中
 		nsConfig.AllocatedPorts[port] = true
-		nsConfig.OrderedKeys.PushBack(port)
 	}
 
 	return nil
 }
 
-func (c *NamespaceNodePortConfig) removePortFromAPI(namespace string, ports []int) error {
+func (c *NamespaceNodePortConfig) RemovePortFromAPI(namespace string, ports []int32) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -98,20 +100,12 @@ func (c *NamespaceNodePortConfig) removePortFromAPI(namespace string, ports []in
 	// 遍历要移除的端口，如果已分配则从列表中移除
 	for _, port := range ports {
 		nsConfig.AllocatedPorts[port] = false
-
-		// 移除 OrderedKeys 中的端口
-		for e := nsConfig.OrderedKeys.Front(); e != nil; e = e.Next() {
-			if e.Value.(int) == port {
-				nsConfig.OrderedKeys.Remove(e)
-				break
-			}
-		}
 	}
 
 	return nil
 }
 
-func (c *NamespaceNodePortConfig) findAvailablePort(namespace string) (int, error) {
+func (c *NamespaceNodePortConfig) FindAvailablePort(namespace string) (int32, error) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -132,21 +126,16 @@ func (c *NamespaceNodePortConfig) findAvailablePort(namespace string) (int, erro
 	return -1, fmt.Errorf("no available port in namespace %s", namespace)
 }
 
-
 // check if port is in the range of requirements
-func (c *NamespaceNodePortConfig) ifMeetRequirements(namespace string, port int) bool {
+func (c *NamespaceNodePortConfig) IfMeetRequirements(namespace string, port int32) bool {
 	nsConfig, ok := c.getNamespace(namespace)
 	if !ok {
 		return false
 	}
 
-	if port <= nsConfig.NodePortRange.Max && port >= nsConfig.NodePortRange.Min {
-		return true
-	}
-
-	return false
+	return port <= nsConfig.NodePortRange.Max && port >= nsConfig.NodePortRange.Min
 }
 
-func (c *NamespaceNodePortConfig) len() int {
+func (c *NamespaceNodePortConfig) Len() int {
 	return len(c.NamespaceConfigs)
 }

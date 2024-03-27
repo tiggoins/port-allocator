@@ -1,9 +1,10 @@
-package controller
+package queue
 
 import (
 	"fmt"
 	"time"
 
+	"github.com/tiggoins/port-allocator/store"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -26,17 +27,17 @@ type Queue struct {
 	informer  cache.SharedInformer
 	workqueue workqueue.RateLimitingInterface
 	stopCh    chan struct{}
+	s         *store.NamespaceNodePortConfig
 }
 
-func NewQueue(kubeClient *kubernetes.Clientset) *Queue {
+func NewQueue(kubeClient *kubernetes.Clientset, stopCh chan struct{}, ss *store.NamespaceNodePortConfig) *Queue {
 	lw := cache.NewListWatchFromClient(kubeClient.RESTClient(), "services", metav1.NamespaceAll, fields.Everything())
 	informer := cache.NewSharedInformer(lw, &corev1.Service{}, time.Second*5)
 
 	rq := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
-	stopCh := make(chan struct{})
-	queue := &Queue{informer: informer, workqueue: rq, stopCh: stopCh}
-	
+	queue := &Queue{informer: informer, workqueue: rq, stopCh: stopCh, s: ss}
+
 	go queue.watchDeleteEvent(queue.stopCh)
 
 	return queue
@@ -66,16 +67,16 @@ func (queue *Queue) watchDeleteEvent(stopCh chan struct{}) {
 }
 
 // run 运行控制器,从workqueue从取出数据交给worker处理
-func (queue *Queue) run(stopCh <-chan struct{}) {
+func (queue *Queue) Run() {
 	defer queue.workqueue.ShutDown()
 
 	klog.Info("start controller to watch the delete event of service.")
 	// 开启工作协程
 	for i := 0; i < 2; i++ {
-		go wait.Until(queue.worker, time.Second, stopCh)
+		go wait.Until(queue.worker, time.Second, queue.stopCh)
 	}
 
-	<-stopCh
+	<-queue.stopCh
 	klog.Info("Controller stopped")
 }
 
@@ -93,6 +94,8 @@ func (queue *Queue) worker() {
 			klog.Warningln("get a key from workqueue but not Event type.ignore")
 			continue
 		}
+
+		queue.s.RemovePortFromAPI(event.Namespace, event.Ports)
 
 		queue.workqueue.Done(key)
 	}
